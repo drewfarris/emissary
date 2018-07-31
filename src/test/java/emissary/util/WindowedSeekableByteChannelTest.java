@@ -7,10 +7,12 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.EOFException;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.ReadableByteChannel;
+import java.util.Arrays;
 
 import org.junit.Test;
 
@@ -296,4 +298,55 @@ public class WindowedSeekableByteChannelTest extends UnitTest {
         assertEquals(26, result);
     }
 
+    @Test
+    public void testSlidingWindow() throws Exception {
+        final byte[] alphabet   = buildArry(I_ALPHABET);
+        final byte[] firstfive  = buildArry(5);
+
+        final byte[] alphabetBuffer = new byte[I_ALPHABET]; // destination for alphabet.
+        final ByteBuffer alphaDest  = ByteBuffer.wrap(alphabetBuffer);
+
+        final byte[] firstFiveBuffer   = new byte[5]; // destination for first 5.
+        final ByteBuffer firstFiveDest = ByteBuffer.wrap(firstFiveBuffer);
+
+        int size = (firstfive.length * 3) + (alphabet.length * 2);
+        final byte[] inputData = new byte[size];
+
+        final ByteBuffer inputBuffer = ByteBuffer.wrap(inputData);
+        inputBuffer.put(firstfive);
+        inputBuffer.put(alphabet);
+        inputBuffer.put(firstfive);
+        inputBuffer.put(alphabet);
+        inputBuffer.put(firstfive);
+
+        final WindowedSeekableByteChannel instance = new WindowedSeekableByteChannel(Channels.newChannel(new ByteArrayInputStream(inputData)), 48);
+
+        readAndCompareBuffer(instance, firstfive, firstFiveDest);
+        readAndCompareBuffer(instance, alphabet,  alphaDest);
+        readAndCompareBuffer(instance, firstfive, firstFiveDest);
+        readAndCompareBuffer(instance, alphabet,  alphaDest);
+        readAndCompareBuffer(instance, firstfive, firstFiveDest);
+    }
+
+
+    /** Read from the WSBC into the destination buffer, comparing the backing byte array of the destination buffer to
+     *  to an expected byte sequence. Once comparisons have been done, the first byte of the destination buffer is
+     *  overwritten and the buffer is cleared. Finally the data is compared once again to validate that the buffers
+     *  no longer match.
+     * @param instance
+     * @param expected
+     * @param destination
+     * @throws IOException
+     */
+    public void readAndCompareBuffer(WindowedSeekableByteChannel instance, byte[] expected, ByteBuffer destination) throws IOException {
+
+        assertEquals(expected.length, destination.limit());
+
+        instance.read(destination);
+        assertTrue(Arrays.equals(expected, destination.array()));
+        destination.put(0, NULL);
+        destination.clear();
+        assertFalse(Arrays.equals(expected, destination.array()));
+
+    }
 }

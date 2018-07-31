@@ -8,6 +8,7 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 
 /**
  * This class provides a seekable channel for a portion, or window, within the provided ReadableByteChannel. The
@@ -30,43 +31,52 @@ public class WindowedSeekableByteChannel implements SeekableByteChannel {
      * estimated length. We have to estimate because we are buffering into a window and may not be at the end. We read
      * ahead to keep buffers full, but there can be additional data.
      */
-    long estimatedLength;
+    private long estimatedLength;
 
     /**
      * The earliest position we can move to. Essentially, position of the underlying Channel that is at position 0 of
-     * buff1
+     * the first buffer maintained in this class.
      */
-    long minposition;
-
-    /* Maximum amount of data allowed in memory */
-    // long maxwindow;
+    private long minposition;
 
     /** flag if we've reached the end of the underlying channel */
     private boolean endofchannel;
 
     /**
-     * Internal buffers for windowed content
+     * Initial number of buffers allocated when this class is created
      */
     private static final int INIT_BUFFERS_SIZE = 2;
+
+    /**
+     * The collection of buffers used to store data read from the underlying channel
+     */
     private LinkedList<ByteBuffer> buffers = new LinkedList<>();
+    
+    /**
+     * A target position in the underlying channel that we need to maintain within this buffer.
+     */
     private long setPosition = -1;
 
 
     /**
      * Creates a new instance and populates buffers with data.
+     *
+     * @param in
+     * @param capacity
      */
-    public WindowedSeekableByteChannel(final ReadableByteChannel in, final int buffsize) throws IOException {
+    public WindowedSeekableByteChannel(final ReadableByteChannel in, final int capacity) throws IOException {
         if ((in == null) || !in.isOpen()) {
-            throw new IllegalArgumentException("Channel must be open and not null:");
+            throw new IllegalArgumentException("Input channel must be open and not null");
         }
 
         this.in = in;
-        int capacity = (int) Math.ceil(((double) buffsize) / INIT_BUFFERS_SIZE);
+
+        int bufferSize = (int) Math.ceil(((double) capacity) / INIT_BUFFERS_SIZE);
 
         for (int x = 0; x < INIT_BUFFERS_SIZE; x++) {
-            ByteBuffer buffer = ByteBuffer.allocate(capacity);
-            readIntoBuffer(buffer);
+            ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
             buffers.add(buffer);
+            readIntoBuffer(buffer);
 
             if (this.endofchannel) {
                 break;
@@ -75,7 +85,10 @@ public class WindowedSeekableByteChannel implements SeekableByteChannel {
     }
 
     /**
-     * If necessary, will move data in the window to make room for additional data from the channel.
+     * If necessary, will move data in the buffers to make room for additional data from the channel. If more than
+     * a half of the last buffer is available for writing, we will do nothing.
+     *
+     *
      */
     private void realignBuffers() throws IOException {
         final int qtr = buffers.peekLast().capacity() / 2;
