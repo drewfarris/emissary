@@ -69,9 +69,9 @@ public abstract class NIOSessionParser extends SessionParser {
      * @param data the byte array to (re)load or null if one should be created
      * @return the byte array of data
      */
-    protected byte[] loadNextRegion(byte[] data) {
-        logger.debug("loadOrFillNextRegion: data.length = {}, chunkSize = {}, chunkStart = {}",
-                data == null ? -1 : data.length, chunkSize, chunkStart);
+    protected byte[] loadNextRegion(byte[] data, int maxSize) {
+        logger.debug("loadOrFillNextRegion: data.length = {}, maxSize = {}, chunkSize = {}, chunkStart = {}",
+                data == null ? -1 : data.length, maxSize, chunkSize, chunkStart);
 
         // Position before checking remaining
         try {
@@ -81,25 +81,29 @@ public abstract class NIOSessionParser extends SessionParser {
             return null;
         }
 
+        int bufferSize = (maxSize > 0) && (maxSize < chunkSize) ? maxSize : chunkSize;
+
         // Optionally create the array or recreate if old is too small
-        if (data == null || data.length < chunkSize) {
-            data = new byte[chunkSize];
+        if (data == null || data.length < bufferSize) {
+            logger.debug("Allocating buffer of size {}", bufferSize);
+            data = new byte[bufferSize];
         }
 
         final ByteBuffer b = ByteBuffer.wrap(data);
-        b.limit(chunkSize);
+        b.limit(data.length);
 
         try {
             readFully(b);
         } catch (EOFException ex) {
-            logger.warn("End of channel reached at {} instead of expected {}", chunkSize - b.remaining(), chunkSize, ex);
+            logger.warn("End of channel reached at {} instead of expected {}", data.length - b.remaining(), bufferSize, ex);
         } catch (IOException ex) {
-            logger.error("Count not read {} bytes into array", chunkSize, ex);
+            logger.error("Count not read {} bytes into array", data.length, ex);
             return null;
         } finally {
             logger.debug("After loadOrFillNextRegion, buffer state = {}, data length = {}", b, data.length);
-            int amountRead = chunkSize - b.remaining();
+            int amountRead = data.length - b.remaining();
             if (amountRead < data.length) {
+                logger.debug("Trimming buffer from {} to {}", data.length, amountRead);
                 data = Arrays.copyOfRange(data, 0, amountRead);
             }
         }

@@ -32,9 +32,9 @@ public abstract class FillingNIOParser extends NIOSessionParser {
      * @return ref to the incoming block now filled or a new one if incoming was null or size was changed
      * @throws ParserEOFException when there is no more data
      */
-    protected byte[] nextChunkOrDie(byte[] data) throws ParserEOFException {
+    protected byte[] nextChunkOrDie(byte[] data, int maxSize) throws ParserEOFException {
         chunkStart += sessionStart;
-        byte[] b = loadNextRegion(data);
+        byte[] b = loadNextRegion(data, maxSize);
 
         if (b == null) {
             setFullyParsed(true);
