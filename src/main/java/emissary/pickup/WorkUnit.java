@@ -8,7 +8,7 @@ import java.io.IOException;
  * A WorkUnit is a unit of work a worker will process. The idea is to replace fileNameList. Currently, WorkBundle is set
  * to only have one file, and so there will only be one WorkUnit.
  */
-public class WorkUnit {
+public final class WorkUnit {
     private String fileName;
     private String transactionId;
     // worker updates this boolean
